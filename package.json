@@ -1,6 +1,6 @@
 {
   "name": "@adityafitsol/vdo-rec",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "terminal-based screen/webcam recorder with zero system dependencies",
   "main": "src/index.js",
   "bin": {
@@ -8,12 +8,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/vdo-rec.git"
+    "url": "git+https://github.com/adityafitsol/vdo-rec.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/vdo-rec/issues"
+    "url": "https://github.com/adityafitsol/vdo-rec/issues"
   },
-  "homepage": "https://github.com/yourusername/vdo-rec#readme",
+  "homepage": "https://github.com/adityafitsol/vdo-rec#readme",
   "scripts": {
     "start": "node bin/vdo.js",
     "gui": "node bin/vdo.js --gui"
@@ -31,7 +31,7 @@
     "gif",
     "screencast"
   ],
-  "author": "",
+  "author": "Aditya",
   "license": "MIT",
   "files": [
     "bin/",
