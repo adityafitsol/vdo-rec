@@ -1,7 +1,7 @@
 {
   "name": "@adityafitsol/vdo-rec",
-  "version": "0.1.1",
-  "description": "terminal-based screen/webcam recorder with zero system dependencies",
+  "version": "0.2.0",
+  "description": "Premium terminal-based screen/webcam recorder with zero system dependencies",
   "main": "src/index.js",
   "bin": {
     "vdo": "bin/vdo.js"
@@ -21,6 +21,8 @@
   "keywords": [
     "screen-recorder",
     "webcam",
+    "audio",
+    "system-audio",
     "ffmpeg",
     "cli",
     "terminal",
@@ -36,7 +38,8 @@
   "files": [
     "bin/",
     "src/",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",

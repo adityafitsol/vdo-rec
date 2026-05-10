@@ -35,11 +35,14 @@ function pickScreenInput(platform) {
 
 /**
  * Build a fluent-ffmpeg command ready to .run().
- * The key thing here is pix_fmt yuv420p — without it, gdigrab gives us bgra
- * which libx264 encodes as yuv444p and most players refuse to play it.
  */
-function buildRecordingCommand(opts) {
-  const { mode, fps, quality, format, outputPath, pip, webcamDevice, platform } = opts;
+async function buildRecordingCommand(opts) {
+  const {
+    mode, fps, quality, format, outputPath, pip,
+    webcamDevice, mic, micDevice, sysAudio, sysAudioDevice, platform, pipX, pipY, shape
+  } = opts;
+
+  const { listDevices } = require('../commands/devices');
 
   const codec = pickVideoCodec(platform);
   const crf = qualityMap[quality] ?? 18;
@@ -47,6 +50,7 @@ function buildRecordingCommand(opts) {
 
   let cmd = ffmpeg();
 
+  // 1. SCREEN INPUT
   if (mode === 'screen' || mode === 'both') {
     cmd = cmd
       .input(screenInput.input)
@@ -54,55 +58,140 @@ function buildRecordingCommand(opts) {
       .inputOptions([`-framerate ${fps}`]);
   }
 
+  // 2. WEBCAM INPUT
   if (mode === 'webcam' || mode === 'both') {
-    const camDevice = webcamDevice || getDefaultWebcamDevice(platform);
+    let cam = webcamDevice;
+    if (!cam) {
+      const devices = await listDevices(platform);
+      cam = devices.find(d => d.type === 'video')?.id;
+    }
 
-    if (platform.os === 'darwin') {
-      cmd = cmd.input('0:0').inputFormat('avfoundation');
-    } else if (platform.os === 'win32') {
-      cmd = cmd.input(`video=${camDevice}`).inputFormat('dshow');
-    } else {
-      cmd = cmd.input(camDevice || '/dev/video0').inputFormat('v4l2');
+    if (cam) {
+      if (platform.os === 'darwin') {
+        cmd = cmd.input(cam.includes(':') ? cam : `${cam}:none`).inputFormat('avfoundation');
+      } else if (platform.os === 'win32') {
+        cmd = cmd.input(`video=${cam}`).inputFormat('dshow');
+      } else {
+        cmd = cmd.input(cam).inputFormat('v4l2');
+      }
+    } else if (mode === 'webcam' || (mode === 'both' && !pip)) {
+       throw new Error('No webcam found');
     }
   }
 
-  // pip — webcam bottom-right, 1/4 screen size
-  if (mode === 'both' && pip) {
-    cmd = cmd.complexFilter([
-      '[1:v]scale=iw/4:ih/4[webcam]',
-      '[0:v][webcam]overlay=W-w-10:H-h-10[out]',
-    ], 'out');
+  // 3. AUDIO INPUTS
+  const audioInputs = [];
+  if (mic) {
+    let audioDev = micDevice;
+    if (!audioDev) {
+      const devices = await listDevices(platform);
+      audioDev = devices.find(d => d.type === 'audio')?.id;
+    }
+    if (audioDev) audioInputs.push({ type: 'mic', id: audioDev });
   }
 
-  // build output options per codec
-  // pix_fmt yuv420p is critical — it's what every player expects
-  // without it, gdigrab's bgra input causes libx264 to output yuv444p which breaks playback
+  if (sysAudio) {
+    let sysDev = sysAudioDevice;
+    if (!sysDev && platform.os === 'win32') {
+       // On Windows, try to find Stereo Mix
+       const devices = await listDevices(platform);
+       sysDev = devices.find(d => d.name.toLowerCase().includes('stereo mix'))?.id;
+    }
+    if (sysDev) audioInputs.push({ type: 'sys', id: sysDev });
+    else if (platform.os === 'win32') {
+       console.warn('Warning: No system audio device (Stereo Mix) found. System audio might not be recorded.');
+    }
+  }
+
+  // Add audio inputs to ffmpeg
+  for (const audio of audioInputs) {
+    if (platform.os === 'darwin') {
+      cmd = cmd.input(`none:${audio.id}`).inputFormat('avfoundation');
+    } else if (platform.os === 'win32') {
+      cmd = cmd.input(`audio=${audio.id}`).inputFormat('dshow');
+    } else {
+      cmd = cmd.input(audio.id).inputFormat(audio.id.startsWith('hw:') ? 'alsa' : 'pulse');
+    }
+  }
+
+  // 4. FILTERS & MAPPING
+  let videoSource = '0:v';
+  let audioSource = null;
+
+  let nextInputIndex = 0;
+  if (mode === 'screen' || mode === 'both') nextInputIndex++;
+  if (mode === 'webcam' || mode === 'both') nextInputIndex++;
+  
+  const audioStartIndex = nextInputIndex;
+
+  const filters = [];
+
+  // Video Filters
+  if (mode === 'both' && pip) {
+    let camFilter = '[1:v]scale=iw/4:ih/4';
+    if (shape === 'circle') {
+      camFilter += ',crop=min(iw,ih):min(iw,ih),geq=lum_expr=\'p(X,Y)\':a_expr=\'if(between(hypot(X-W/2,Y-H/2),0,W/2),255,0)\'';
+    }
+    filters.push(`${camFilter}[webcam]`);
+    filters.push(`[0:v][webcam]overlay=W*${pipX}:H*${pipY}[outv]`);
+    videoSource = '[outv]';
+  }
+
+  // Audio Filters (Mixing)
+  if (audioInputs.length > 1) {
+    const amixInputs = audioInputs.map((_, i) => `[${audioStartIndex + i}:a]`).join('');
+    filters.push(`${amixInputs}amix=inputs=${audioInputs.length}[aout]`);
+    audioSource = '[aout]';
+  } else if (audioInputs.length === 1) {
+    audioSource = `${audioStartIndex}:a`;
+  }
+
+  if (filters.length > 0) {
+    cmd = cmd.complexFilter(filters);
+  }
+
+  // Build output options
   const outputOpts = ['-pix_fmt yuv420p'];
 
   if (codec === 'libx264') {
-    outputOpts.push(`-crf ${crf}`, '-preset ultrafast', '-movflags +faststart');
+    // 'faster' is a good balance between quality and encoding speed
+    outputOpts.push(`-crf ${crf}`, '-preset faster', '-movflags +faststart');
   } else if (codec === 'h264_videotoolbox') {
-    // videotoolbox uses quality factor 1-100, not crf
     const q = Math.round(100 - (crf / 51) * 100);
     outputOpts.push(`-q:v ${q}`, '-movflags +faststart');
   } else if (codec === 'h264_nvenc') {
-    // nvenc equivalent of crf is -cq
     outputOpts.push(`-cq ${crf}`, '-preset fast', '-movflags +faststart');
   }
 
   cmd = cmd
     .videoCodec(codec)
     .outputOptions(outputOpts)
-    .fps(fps)
-    .output(outputPath);
+    .fps(fps);
 
-  // gif: no audio, scale to 640px wide, lanczos for quality
+  // Manual mapping to avoid fluent-ffmpeg adding brackets to stream specifiers
+  if (videoSource.startsWith('[')) {
+    cmd = cmd.map(videoSource);
+  } else {
+    cmd = cmd.outputOptions(`-map ${videoSource}`);
+  }
+
+  if (audioSource && format !== 'gif') {
+    if (audioSource.startsWith('[')) {
+      cmd = cmd.map(audioSource);
+    } else {
+      cmd = cmd.outputOptions(`-map ${audioSource}`);
+    }
+  } else {
+    cmd = cmd.noAudio();
+  }
+
   if (format === 'gif') {
     cmd = cmd
-      .noAudio()
       .outputOptions([`-vf fps=${fps},scale=640:-1:flags=lanczos`])
       .outputOptions(['-loop 0']);
   }
+
+  cmd = cmd.output(outputPath);
 
   return { cmd, codec };
 }

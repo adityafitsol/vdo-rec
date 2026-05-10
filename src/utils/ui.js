@@ -105,6 +105,18 @@ async function runInteractivePrompt() {
       default: 'mp4',
     },
     {
+      type: 'confirm',
+      name: 'mic',
+      message: 'Record microphone audio?',
+      default: false,
+    },
+    {
+      type: 'confirm',
+      name: 'sysAudio',
+      message: 'Record system audio (internal sound)?',
+      default: false,
+    },
+    {
       type: 'input',
       name: 'out',
       message: 'Output folder?',
@@ -115,15 +127,41 @@ async function runInteractivePrompt() {
       name: 'pip',
       message: 'Enable picture-in-picture webcam overlay?',
       default: false,
-      // only ask this if mode is 'both'
       when: (ans) => ans.mode === 'both',
+    },
+    {
+      type: 'list',
+      name: 'shape',
+      message: 'Webcam overlay shape?',
+      choices: ['rectangle', 'circle'],
+      default: 'rectangle',
+      when: (ans) => ans.pip,
+    },
+    {
+      type: 'input',
+      name: 'pipX',
+      message: 'Webcam X position (0-1)?',
+      default: '0.75',
+      when: (ans) => ans.pip,
+    },
+    {
+      type: 'input',
+      name: 'pipY',
+      message: 'Webcam Y position (0-1)?',
+      default: '0.75',
+      when: (ans) => ans.pip,
     },
   ]);
 
   return {
     screen: answers.mode === 'screen' || answers.mode === 'both',
     webcam: answers.mode === 'webcam' || answers.mode === 'both',
+    mic: answers.mic || false,
+    sysAudio: answers.sysAudio || false,
     pip: answers.pip || false,
+    shape: answers.shape || 'rectangle',
+    pipX: parseFloat(answers.pipX || '0.75'),
+    pipY: parseFloat(answers.pipY || '0.75'),
     fps: answers.fps,
     quality: answers.quality,
     format: answers.format,

@@ -18,6 +18,13 @@ program
   .option('--format <ext>', 'mp4 | mkv | webm | gif', 'mp4')
   .option('--out <dir>', 'output directory', './recordings')
   .option('--webcam-device <id>', 'specific webcam device id')
+  .option('--mic', 'record audio from microphone')
+  .option('--mic-device <id>', 'specific microphone device id')
+  .option('--sys-audio', 'record system audio (internal sound)')
+  .option('--sys-audio-device <id>', 'specific system audio device id')
+  .option('--pip-x <float>', 'webcam X position (0-1)', (v) => parseFloat(v), 0.75)
+  .option('--pip-y <float>', 'webcam Y position (0-1)', (v) => parseFloat(v), 0.75)
+  .option('--shape <type>', 'webcam shape (rectangle|circle)', 'rectangle')
   .option('--list-devices', 'list available cameras and audio devices')
   .option('--gui', 'launch web GUI on localhost:4242')
   // root action — commander v11 needs this or it prints help when subcommands exist
@@ -63,12 +70,20 @@ program
       await startRecording({
         screen: opts.screen || false,
         webcam: opts.webcam || false,
+        mic: opts.mic || false,
+        micDevice: opts.micDevice,
+        sysAudio: opts.sysAudio || false,
+        sysAudioDevice: opts.sysAudioDevice,
         pip: opts.pip || false,
+        pipX: opts.pipX,
+        pipY: opts.pipY,
+        shape: opts.shape,
         fps: opts.fps,
         quality: opts.quality,
         format: opts.format,
         out: opts.out,
         webcamDevice: opts.webcamDevice || null,
+        micDevice: opts.micDevice || null,
       });
     } catch (err) {
       if (err && err.message) console.error('\nError:', err.message);

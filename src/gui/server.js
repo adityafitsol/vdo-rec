@@ -81,7 +81,12 @@ function launchGui() {
     startRecording({
       screen: mode === 'screen' || mode === 'both',
       webcam: mode === 'webcam' || mode === 'both',
-      pip: req.body.pip || false,
+      mic: req.body.mic || false,
+      sysAudio: req.body.sysAudio || false,
+      pip: req.body.pip || true, 
+      pipX: req.body.pipX ?? 0.75,
+      pipY: req.body.pipY ?? 0.75,
+      shape: req.body.shape || 'rectangle',
       fps: parseInt(fps),
       quality,
       format,
@@ -166,28 +171,34 @@ function buildHtml() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>vdo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0f0f0f;
-      --surface: #1a1a1a;
-      --border: #2a2a2a;
-      --text: #e8e8e8;
-      --muted: #666;
+      --bg: #050505;
+      --surface: #111111;
+      --surface-glass: rgba(255, 255, 255, 0.03);
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #ffffff;
+      --muted: #888888;
       --accent: #00d4ff;
-      --red: #ff4444;
-      --green: #44ff88;
+      --red: #ff3333;
+      --green: #00ff88;
       --yellow: #ffcc00;
+      --font: 'Space Grotesk', sans-serif;
     }
 
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-family: var(--font);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      background-image: radial-gradient(circle at 50% -20%, #1a1a1a, #050505);
     }
 
     header {
@@ -218,21 +229,24 @@ function buildHtml() {
     }
 
     .panel {
-      padding: 32px;
+      padding: 40px;
       border-right: 1px solid var(--border);
     }
 
     .sidebar {
-      padding: 24px;
+      padding: 32px;
+      background: rgba(255, 255, 255, 0.01);
     }
 
     /* recording status */
     .status-card {
-      background: var(--surface);
+      background: var(--surface-glass);
+      backdrop-filter: blur(10px);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 28px;
-      margin-bottom: 24px;
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 32px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     }
 
     .rec-indicator {
@@ -326,17 +340,22 @@ function buildHtml() {
     /* config form */
     .config-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      margin-bottom: 32px;
+      background: var(--surface-glass);
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
     }
 
     .field label {
       display: block;
       font-size: 11px;
+      font-weight: 600;
       color: var(--muted);
-      margin-bottom: 6px;
-      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      letter-spacing: 1.5px;
       text-transform: uppercase;
     }
 
@@ -435,6 +454,86 @@ function buildHtml() {
       margin-right: 6px;
     }
     .ws-dot.connected { background: var(--green); }
+
+    /* volume meter */
+    .mic-test {
+      margin-top: 12px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .meter-bg {
+      flex: 1;
+      height: 6px;
+      background: #333;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      transition: width 0.1s ease;
+    }
+    .mic-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Draggable Webcam Preview */
+    .preview-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .preview-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      color: var(--muted);
+      z-index: 10;
+    }
+    .pip-preview {
+      position: absolute;
+      width: 25%;
+      aspect-ratio: 16/9;
+      background: #222;
+      border: 2px solid var(--accent);
+      border-radius: 8px;
+      cursor: move;
+      display: none;
+      overflow: hidden;
+      z-index: 5;
+    }
+    .pip-preview video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .pip-preview.dragging {
+      border-color: var(--green);
+      opacity: 0.8;
+    }
+    .pip-preview.circle {
+      aspect-ratio: 1/1;
+      border-radius: 50%;
+    }
   </style>
 </head>
 <body>
@@ -458,6 +557,13 @@ function buildHtml() {
       </div>
       <div class="timer" id="timer">00:00</div>
       <div class="file-size" id="fileSize"></div>
+    </div>
+
+    <div class="preview-container" id="previewContainer">
+      <div class="preview-label">Screen Capture Area (Preview)</div>
+      <div class="pip-preview" id="pipPreview">
+        <video id="webcamVideo" autoplay muted playsinline></video>
+      </div>
     </div>
 
     <div class="controls">
@@ -499,6 +605,28 @@ function buildHtml() {
           <option value="gif">gif</option>
         </select>
       </div>
+      <div class="field" id="shapeField" style="display: none;">
+        <label>Webcam Shape</label>
+        <select id="cfgShape" onchange="updateWebcamShape()">
+          <option value="rectangle" selected>Rectangle</option>
+          <option value="circle">Circle</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column: span 2; display: flex; align-items: center; gap: 12px; padding-top: 10px;">
+        <input type="checkbox" id="cfgMic" style="width: 20px; height: 20px;" onchange="toggleMicTest()">
+        <label for="cfgMic" style="margin-bottom: 0; cursor: pointer;">Record Microphone</label>
+      </div>
+      <div class="field" style="grid-column: span 2; display: flex; align-items: center; gap: 12px; padding-top: 5px;">
+        <input type="checkbox" id="cfgSysAudio" style="width: 20px; height: 20px;">
+        <label for="cfgSysAudio" style="margin-bottom: 0; cursor: pointer;">Record System Audio</label>
+      </div>
+    </div>
+
+    <div class="mic-test" id="micTest">
+      <span class="mic-label">Mic Activity</span>
+      <div class="meter-bg">
+        <div class="meter-fill" id="meterFill"></div>
+      </div>
     </div>
 
   </div>
@@ -516,6 +644,148 @@ function buildHtml() {
 <script>
   let ws;
   let isRecording = false;
+  let audioContext;
+  let analyser;
+  let microphone;
+  let animationId;
+  let pipX = 0.75; // normalized 0-1 (starting at bottom-right 75%)
+  let pipY = 0.75;
+  let webcamStream;
+
+  // Draggable logic
+  const pip = document.getElementById('pipPreview');
+  const container = document.getElementById('previewContainer');
+  let isDragging = false;
+  let startX, startY;
+
+  pip.addEventListener('mousedown', (e) => {
+    if (isRecording) return;
+    isDragging = true;
+    pip.classList.add('dragging');
+    startX = e.clientX - pip.offsetLeft;
+    startY = e.clientY - pip.offsetTop;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const rect = container.getBoundingClientRect();
+    let x = e.clientX - rect.left - startX;
+    let y = e.clientY - rect.top - startY;
+
+    // Bounds
+    x = Math.max(0, Math.min(x, rect.width - pip.offsetWidth));
+    y = Math.max(0, Math.min(y, rect.height - pip.offsetHeight));
+
+    pip.style.left = x + 'px';
+    pip.style.top = y + 'px';
+
+    // Update normalized coords
+    pipX = x / rect.width;
+    pipY = y / rect.height;
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDragging = false;
+    pip.classList.remove('dragging');
+  });
+
+  function updateWebcamShape() {
+    const shape = document.getElementById('cfgShape').value;
+    if (shape === 'circle') {
+      pip.classList.add('circle');
+    } else {
+      pip.classList.remove('circle');
+    }
+  }
+
+  async function toggleWebcamPreview() {
+    const mode = document.getElementById('cfgMode').value;
+    const showPip = mode === 'both' || mode === 'webcam';
+    
+    document.getElementById('shapeField').style.display = showPip ? 'block' : 'none';
+
+    if (showPip) {
+      pip.style.display = 'block';
+      updateWebcamShape();
+      
+      // Force a layout recalculation for initial position
+      setTimeout(() => {
+        const rect = container.getBoundingClientRect();
+        if (rect.width > 0) {
+          pip.style.left = (pipX * rect.width) + 'px';
+          pip.style.top = (pipY * rect.height) + 'px';
+        }
+      }, 50);
+
+      if (!webcamStream) {
+        try {
+          webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          document.getElementById('webcamVideo').srcObject = webcamStream;
+        } catch (err) {
+          console.error('Webcam access denied:', err);
+          toast('Webcam access denied', 'error');
+        }
+      }
+    } else {
+      pip.style.display = 'none';
+      if (webcamStream) {
+        webcamStream.getTracks().forEach(t => t.stop());
+        webcamStream = null;
+      }
+    }
+
+    // Set initial position if first time
+    if (showPip) {
+      const rect = container.getBoundingClientRect();
+      pip.style.left = (pipX * rect.width) + 'px';
+      pip.style.top = (pipY * rect.height) + 'px';
+    }
+  }
+
+  document.getElementById('cfgMode').addEventListener('change', toggleWebcamPreview);
+
+  async function toggleMicTest() {
+    const isChecked = document.getElementById('cfgMic').checked;
+    const testEl = document.getElementById('micTest');
+    const fillEl = document.getElementById('meterFill');
+
+    if (isChecked) {
+      testEl.style.display = 'flex';
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        microphone = audioContext.createMediaStreamSource(stream);
+        microphone.connect(analyser);
+        analyser.fftSize = 256;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const updateMeter = () => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / bufferLength;
+          const vol = Math.min(100, Math.pow(average / 128, 0.5) * 100);
+          fillEl.style.width = vol + '%';
+          animationId = requestAnimationFrame(updateMeter);
+        };
+        updateMeter();
+      } catch (err) {
+        console.error('Mic access denied:', err);
+        testEl.style.display = 'none';
+        document.getElementById('cfgMic').checked = false;
+        toast('Microphone access denied', 'error');
+      }
+    } else {
+      testEl.style.display = 'none';
+      if (animationId) cancelAnimationFrame(animationId);
+      if (audioContext) audioContext.close();
+      fillEl.style.width = '0%';
+    }
+  }
 
   function connectWs() {
     ws = new WebSocket('ws://' + location.host);
@@ -584,7 +854,7 @@ function buildHtml() {
     btnStop.disabled = !recording;
     btnStop.textContent = '■ Stop';
 
-    ['cfgMode','cfgFps','cfgQuality','cfgFormat'].forEach(id => {
+    ['cfgMode','cfgFps','cfgQuality','cfgFormat','cfgMic'].forEach(id => {
       document.getElementById(id).disabled = recording;
     });
   }
@@ -595,6 +865,11 @@ function buildHtml() {
       fps: parseInt(document.getElementById('cfgFps').value),
       quality: document.getElementById('cfgQuality').value,
       format: document.getElementById('cfgFormat').value,
+      mic: document.getElementById('cfgMic').checked,
+      sysAudio: document.getElementById('cfgSysAudio').checked,
+      shape: document.getElementById('cfgShape').value,
+      pipX: pipX,
+      pipY: pipY
     };
 
     const res = await fetch('/api/start', {

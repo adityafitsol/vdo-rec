@@ -46,12 +46,19 @@ async function startRecording(opts) {
   const {
     screen = true,
     webcam = false,
+    mic = false,
     pip = false,
     fps = 30,
     quality = 'high',
     format = 'mp4',
     out = './recordings',
     webcamDevice = null,
+    micDevice = null,
+    sysAudio = false,
+    sysAudioDevice = null,
+    pipX = 0.75,
+    pipY = 0.75,
+    shape = 'rectangle',
   } = opts;
 
   const platform = detectPlatform();
@@ -63,8 +70,8 @@ async function startRecording(opts) {
 
   const outputPath = resolveOutputPath(out, format);
 
-  let { cmd, codec } = buildRecordingCommand({
-    mode, fps, quality, format, outputPath, pip, webcamDevice, platform,
+  let { cmd, codec } = await buildRecordingCommand({
+    mode, fps, quality, format, outputPath, pip, webcamDevice, mic, micDevice, sysAudio, sysAudioDevice, platform, pipX, pipY, shape,
   });
 
   printRecordingBanner({ mode, fps, quality, format, outputPath, codec });

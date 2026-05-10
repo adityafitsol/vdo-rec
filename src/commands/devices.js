@@ -75,16 +75,22 @@ function listDevicesWin() {
     const output = result.stderr || '';
     const lines = output.split('\n');
 
+    let currentType = null;
     for (const line of lines) {
-      // dshow output: "DirectShow video devices" or "DirectShow audio devices"
-      // then lines like:  "Integrated Webcam" (video)
-      const videoMatch = line.match(/"([^"]+)"\s+\(video\)/);
-      const audioMatch = line.match(/"([^"]+)"\s+\(audio\)/);
+      if (line.includes('DirectShow video devices')) {
+        currentType = 'video';
+        continue;
+      }
+      if (line.includes('DirectShow audio devices')) {
+        currentType = 'audio';
+        continue;
+      }
 
-      if (videoMatch) {
-        devices.push({ id: videoMatch[1], name: videoMatch[1], type: 'video' });
-      } else if (audioMatch) {
-        devices.push({ id: audioMatch[1], name: audioMatch[1], type: 'audio' });
+      if (line.includes('Alternative name')) continue;
+
+      const match = line.match(/"([^"]+)"/);
+      if (match && currentType) {
+        devices.push({ id: match[1], name: match[1], type: currentType });
       }
     }
   } catch (err) {
