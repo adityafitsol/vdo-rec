@@ -38,8 +38,8 @@ function pickScreenInput(platform) {
  */
 async function buildRecordingCommand(opts) {
   const {
-    mode, fps, quality, format, outputPath, pip,
-    webcamDevice, mic, micDevice, sysAudio, sysAudioDevice, platform, pipX, pipY, shape
+    fps, quality, format, outputPath,
+    mic, micDevice, sysAudio, sysAudioDevice, platform
   } = opts;
 
   const { listDevices } = require('../commands/devices');
@@ -51,35 +51,12 @@ async function buildRecordingCommand(opts) {
   let cmd = ffmpeg();
 
   // 1. SCREEN INPUT
-  if (mode === 'screen' || mode === 'both') {
-    cmd = cmd
-      .input(screenInput.input)
-      .inputFormat(screenInput.format)
-      .inputOptions([`-framerate ${fps}`]);
-  }
+  cmd = cmd
+    .input(screenInput.input)
+    .inputFormat(screenInput.format)
+    .inputOptions([`-framerate ${fps}`]);
 
-  // 2. WEBCAM INPUT
-  if (mode === 'webcam' || mode === 'both') {
-    let cam = webcamDevice;
-    if (!cam) {
-      const devices = await listDevices(platform);
-      cam = devices.find(d => d.type === 'video')?.id;
-    }
-
-    if (cam) {
-      if (platform.os === 'darwin') {
-        cmd = cmd.input(cam.includes(':') ? cam : `${cam}:none`).inputFormat('avfoundation');
-      } else if (platform.os === 'win32') {
-        cmd = cmd.input(`video=${cam}`).inputFormat('dshow');
-      } else {
-        cmd = cmd.input(cam).inputFormat('v4l2');
-      }
-    } else if (mode === 'webcam' || (mode === 'both' && !pip)) {
-       throw new Error('No webcam found');
-    }
-  }
-
-  // 3. AUDIO INPUTS
+  // 2. AUDIO INPUTS
   const audioInputs = [];
   if (mic) {
     let audioDev = micDevice;
@@ -93,17 +70,12 @@ async function buildRecordingCommand(opts) {
   if (sysAudio) {
     let sysDev = sysAudioDevice;
     if (!sysDev && platform.os === 'win32') {
-       // On Windows, try to find Stereo Mix
        const devices = await listDevices(platform);
        sysDev = devices.find(d => d.name.toLowerCase().includes('stereo mix'))?.id;
     }
     if (sysDev) audioInputs.push({ type: 'sys', id: sysDev });
-    else if (platform.os === 'win32') {
-       console.warn('Warning: No system audio device (Stereo Mix) found. System audio might not be recorded.');
-    }
   }
 
-  // Add audio inputs to ffmpeg
   for (const audio of audioInputs) {
     if (platform.os === 'darwin') {
       cmd = cmd.input(`none:${audio.id}`).inputFormat('avfoundation');
@@ -114,30 +86,14 @@ async function buildRecordingCommand(opts) {
     }
   }
 
-  // 4. FILTERS & MAPPING
+  // 3. FILTERS & MAPPING
   let videoSource = '0:v';
   let audioSource = null;
-
-  let nextInputIndex = 0;
-  if (mode === 'screen' || mode === 'both') nextInputIndex++;
-  if (mode === 'webcam' || mode === 'both') nextInputIndex++;
-  
-  const audioStartIndex = nextInputIndex;
+  const audioStartIndex = 1; // Screen is always 0
 
   const filters = [];
 
-  // Video Filters
-  if (mode === 'both' && pip) {
-    let camFilter = '[1:v]scale=iw/4:ih/4';
-    if (shape === 'circle') {
-      camFilter += ',crop=min(iw,ih):min(iw,ih),geq=lum_expr=\'p(X,Y)\':a_expr=\'if(between(hypot(X-W/2,Y-H/2),0,W/2),255,0)\'';
-    }
-    filters.push(`${camFilter}[webcam]`);
-    filters.push(`[0:v][webcam]overlay=W*${pipX}:H*${pipY}[outv]`);
-    videoSource = '[outv]';
-  }
-
-  // Audio Filters (Mixing)
+  // Audio Mixing Filter
   if (audioInputs.length > 1) {
     const amixInputs = audioInputs.map((_, i) => `[${audioStartIndex + i}:a]`).join('');
     filters.push(`${amixInputs}amix=inputs=${audioInputs.length}[aout]`);
@@ -152,9 +108,7 @@ async function buildRecordingCommand(opts) {
 
   // Build output options
   const outputOpts = ['-pix_fmt yuv420p'];
-
   if (codec === 'libx264') {
-    // 'faster' is a good balance between quality and encoding speed
     outputOpts.push(`-crf ${crf}`, '-preset faster', '-movflags +faststart');
   } else if (codec === 'h264_videotoolbox') {
     const q = Math.round(100 - (crf / 51) * 100);
@@ -163,12 +117,9 @@ async function buildRecordingCommand(opts) {
     outputOpts.push(`-cq ${crf}`, '-preset fast', '-movflags +faststart');
   }
 
-  cmd = cmd
-    .videoCodec(codec)
-    .outputOptions(outputOpts)
-    .fps(fps);
+  cmd = cmd.videoCodec(codec).outputOptions(outputOpts).fps(fps);
 
-  // Manual mapping to avoid fluent-ffmpeg adding brackets to stream specifiers
+  // Manual mapping
   if (videoSource.startsWith('[')) {
     cmd = cmd.map(videoSource);
   } else {

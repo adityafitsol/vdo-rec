@@ -2,7 +2,7 @@
 
 vdo records your screen. that's it.
 
-Premium terminal-based screen and webcam recorder. Wraps FFmpeg under the hood, auto-picks the best codec for your machine. Featuring a stunning Glassmorphism GUI and built-in audio support.
+Premium terminal-based screen recorder. Wraps FFmpeg under the hood, auto-picks the best codec for your machine. Featuring a stunning Glassmorphism GUI and built-in audio support.
 
 ## Quickstart
 
@@ -28,12 +28,6 @@ vdo
 # screen only
 vdo --screen
 
-# webcam only
-vdo --webcam
-
-# screen + webcam with draggable picture-in-picture
-vdo --screen --webcam --pip --shape circle --pip-x 0.8 --pip-y 0.8
-
 # audio recording
 vdo --screen --mic            # record microphone
 vdo --screen --sys-audio      # record system audio (internal sound)
@@ -42,11 +36,13 @@ vdo --screen --mic --sys-audio # record both (mixed!)
 # launch premium GUI
 vdo --gui
 
+# webcam overlay (Coming Soon in v0.4)
+# vdo --screen --webcam --pip --shape circle
+
 # set framerate
 vdo --screen --fps 60
 
 # quality levels
-vdo --screen --quality lossless   # crf 0, huge files
 vdo --screen --quality high       # crf 18, default
 vdo --screen --quality balanced   # crf 28, smaller files
 
@@ -58,10 +54,9 @@ vdo --list-devices
 
 Launch a beautiful, modern recording dashboard with:
 - Glassmorphism UI: Stunning dark-mode interface using Space Grotesk font.
-- Draggable Webcam: Drag your webcam preview to any corner of the screen before recording.
-- Webcam Shapes: Toggle between Rectangle and Circle shapes.
 - Mic Meter: Visual volume bar to verify your microphone is working.
 - One-Click Recording: Start/Stop and manage your captures from the browser.
+- Webcam Overlay: Draggable PiP and circular crops coming soon!
 
 ```bash
 vdo --gui

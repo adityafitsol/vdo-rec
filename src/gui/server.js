@@ -79,14 +79,11 @@ function launchGui() {
 
     // run in background — don't await here or the response never sends
     startRecording({
-      screen: mode === 'screen' || mode === 'both',
-      webcam: mode === 'webcam' || mode === 'both',
+      screen: true,
+      webcam: false,
       mic: req.body.mic || false,
       sysAudio: req.body.sysAudio || false,
-      pip: req.body.pip || true, 
-      pipX: req.body.pipX ?? 0.75,
-      pipY: req.body.pipY ?? 0.75,
-      shape: req.body.shape || 'rectangle',
+      pip: false,
       fps: parseInt(fps),
       quality,
       format,
@@ -561,7 +558,7 @@ function buildHtml() {
 
     <div class="preview-container" id="previewContainer">
       <div class="preview-label">Screen Capture Area (Preview)</div>
-      <div class="pip-preview" id="pipPreview">
+      <div class="pip-preview" id="pipPreview" style="display: none;">
         <video id="webcamVideo" autoplay muted playsinline></video>
       </div>
     </div>
@@ -575,9 +572,8 @@ function buildHtml() {
       <div class="field">
         <label>Mode</label>
         <select id="cfgMode">
-          <option value="screen">Screen</option>
-          <option value="webcam">Webcam</option>
-          <option value="both">Screen + Webcam</option>
+          <option value="screen">Screen Only</option>
+          <option value="both" disabled>Screen + Webcam (Coming Soon)</option>
         </select>
       </div>
       <div class="field">
@@ -866,10 +862,7 @@ function buildHtml() {
       quality: document.getElementById('cfgQuality').value,
       format: document.getElementById('cfgFormat').value,
       mic: document.getElementById('cfgMic').checked,
-      sysAudio: document.getElementById('cfgSysAudio').checked,
-      shape: document.getElementById('cfgShape').value,
-      pipX: pipX,
-      pipY: pipY
+      sysAudio: document.getElementById('cfgSysAudio').checked
     };
 
     const res = await fetch('/api/start', {

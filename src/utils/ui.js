@@ -66,17 +66,6 @@ async function runInteractivePrompt() {
   const answers = await inquirer.prompt([
     {
       type: 'list',
-      name: 'mode',
-      message: 'What do you want to record?',
-      choices: [
-        { name: 'Screen', value: 'screen' },
-        { name: 'Webcam', value: 'webcam' },
-        { name: 'Screen + Webcam (picture-in-picture)', value: 'both' },
-      ],
-      default: 'screen',
-    },
-    {
-      type: 'list',
       name: 'fps',
       message: 'Frame rate?',
       choices: [
@@ -122,46 +111,13 @@ async function runInteractivePrompt() {
       message: 'Output folder?',
       default: './recordings',
     },
-    {
-      type: 'confirm',
-      name: 'pip',
-      message: 'Enable picture-in-picture webcam overlay?',
-      default: false,
-      when: (ans) => ans.mode === 'both',
-    },
-    {
-      type: 'list',
-      name: 'shape',
-      message: 'Webcam overlay shape?',
-      choices: ['rectangle', 'circle'],
-      default: 'rectangle',
-      when: (ans) => ans.pip,
-    },
-    {
-      type: 'input',
-      name: 'pipX',
-      message: 'Webcam X position (0-1)?',
-      default: '0.75',
-      when: (ans) => ans.pip,
-    },
-    {
-      type: 'input',
-      name: 'pipY',
-      message: 'Webcam Y position (0-1)?',
-      default: '0.75',
-      when: (ans) => ans.pip,
-    },
   ]);
 
   return {
-    screen: answers.mode === 'screen' || answers.mode === 'both',
-    webcam: answers.mode === 'webcam' || answers.mode === 'both',
+    screen: true,
+    webcam: false,
     mic: answers.mic || false,
     sysAudio: answers.sysAudio || false,
-    pip: answers.pip || false,
-    shape: answers.shape || 'rectangle',
-    pipX: parseFloat(answers.pipX || '0.75'),
-    pipY: parseFloat(answers.pipY || '0.75'),
     fps: answers.fps,
     quality: answers.quality,
     format: answers.format,
