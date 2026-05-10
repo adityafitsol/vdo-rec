@@ -1,6 +1,6 @@
 {
   "name": "@adityafitsol/vdo-rec",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Premium terminal-based screen/webcam recorder with zero system dependencies",
   "main": "src/index.js",
   "bin": {
