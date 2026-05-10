@@ -1,0 +1,12 @@
+node_modules/
+test_recordings/
+recordings/
+*.log
+.DS_Store
+.vscode/
+.idea/
+*.mp4
+*.mkv
+*.webm
+*.gif
+test_*.js

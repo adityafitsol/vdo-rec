@@ -1,0 +1,56 @@
+{
+  "name": "@adityafitsol/vdo-rec",
+  "version": "0.1.0",
+  "description": "terminal-based screen/webcam recorder with zero system dependencies",
+  "main": "src/index.js",
+  "bin": {
+    "vdo": "bin/vdo.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/vdo-rec.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/vdo-rec/issues"
+  },
+  "homepage": "https://github.com/yourusername/vdo-rec#readme",
+  "scripts": {
+    "start": "node bin/vdo.js",
+    "gui": "node bin/vdo.js --gui"
+  },
+  "keywords": [
+    "screen-recorder",
+    "webcam",
+    "ffmpeg",
+    "cli",
+    "terminal",
+    "recording",
+    "screen-capture",
+    "video",
+    "mp4",
+    "gif",
+    "screencast"
+  ],
+  "author": "",
+  "license": "MIT",
+  "files": [
+    "bin/",
+    "src/",
+    "README.md"
+  ],
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "chalk": "^4.1.2",
+    "commander": "^11.0.0",
+    "express": "^4.18.2",
+    "fluent-ffmpeg": "^2.1.2",
+    "inquirer": "^8.2.6",
+    "node-webcam": "^0.8.1",
+    "open": "^8.4.2",
+    "ora": "^5.4.1",
+    "ws": "^8.14.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
