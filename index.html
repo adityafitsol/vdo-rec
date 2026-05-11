@@ -134,11 +134,24 @@
       </a>
     </div>
 
-    <button class="md:hidden text-white">
-      <span class="material-symbols-outlined">menu</span>
+    <button onclick="toggleMenu()" class="md:hidden text-white w-10 h-10 flex items-center justify-center bg-white/5 rounded-lg">
+      <span id="menuIcon" class="material-symbols-outlined">menu</span>
     </button>
   </div>
 </nav>
+
+<!-- Mobile Menu Overlay -->
+<div id="mobileMenu" class="fixed inset-0 z-[60] bg-bg/95 backdrop-blur-xl transition-all duration-500 opacity-0 pointer-events-none translate-y-10">
+  <div class="flex flex-col items-center justify-center h-full gap-8 px-6 text-center">
+    <button onclick="toggleMenu()" class="absolute top-6 right-6 w-12 h-12 flex items-center justify-center bg-white/5 rounded-full">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+    <a href="#features" onclick="toggleMenu()" class="text-4xl font-heading font-bold text-white">Features</a>
+    <a href="docs.html" onclick="toggleMenu()" class="text-4xl font-heading font-bold text-white">Documentation</a>
+    <a href="https://github.com/adityafitsol/vdo-rec" onclick="toggleMenu()" class="text-4xl font-heading font-bold text-white">GitHub</a>
+    <a href="#" class="w-full py-5 bg-primary text-black text-xl font-bold rounded-3xl mt-4">Download v0.4.0</a>
+  </div>
+</div>
 
 <main>
   <!-- Hero Section -->
@@ -152,7 +165,7 @@
         New Release v0.4.0
       </div>
       
-      <h1 class="font-heading text-6xl md:text-8xl font-bold mb-8 tracking-tighter leading-[0.9] max-w-4xl mx-auto">
+      <h1 class="font-heading text-5xl md:text-8xl font-bold mb-8 tracking-tighter leading-[0.9] max-w-4xl mx-auto">
         Screen recording <br/>
         <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">reimagined.</span>
       </h1>
@@ -181,7 +194,7 @@
             </button>
           </div>
           
-          <div class="p-10 text-left font-mono text-base md:text-lg leading-relaxed relative">
+          <div class="p-6 md:p-10 text-left font-mono text-sm md:text-lg leading-relaxed relative overflow-x-auto">
             <!-- Terminal Lines -->
             <div class="space-y-4">
               <div class="flex items-center gap-4">
@@ -340,6 +353,24 @@
 </footer>
 
   <script>
+    function toggleMenu() {
+      const menu = document.getElementById('mobileMenu');
+      const icon = document.getElementById('menuIcon');
+      const isVisible = menu.classList.contains('opacity-100');
+      
+      if (isVisible) {
+        menu.classList.remove('opacity-100', 'translate-y-0');
+        menu.classList.add('opacity-0', 'pointer-events-none', 'translate-y-10');
+        icon.innerText = 'menu';
+        document.body.style.overflow = 'auto';
+      } else {
+        menu.classList.add('opacity-100', 'translate-y-0');
+        menu.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-10');
+        icon.innerText = 'close';
+        document.body.style.overflow = 'hidden';
+      }
+    }
+
     document.querySelectorAll('button').forEach(btn => {
       if (btn.querySelector('.material-symbols-outlined')?.innerText === 'content_copy') {
         btn.onclick = () => {

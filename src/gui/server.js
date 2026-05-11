@@ -97,19 +97,19 @@ function launchGui() {
 
     <!-- Main Control -->
     <main class="flex-1 flex flex-col gap-8">
-      <div class="glass p-12 rounded-[48px] flex flex-col items-center justify-center text-center relative overflow-hidden">
-        <div id="statusIndicator" class="absolute top-8 left-8 flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5">
+      <div class="glass p-8 md:p-12 rounded-[32px] md:rounded-[48px] flex flex-col items-center justify-center text-center relative overflow-hidden">
+        <div id="statusIndicator" class="absolute top-4 left-4 md:top-8 md:left-8 flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5">
           <span class="w-2 h-2 rounded-full bg-muted" id="statusDot"></span>
           <span class="text-[10px] font-bold text-muted uppercase tracking-widest" id="statusText">Idle</span>
         </div>
 
-        <div class="mb-8">
-          <div id="timer" class="font-heading text-8xl md:text-9xl font-bold tracking-tighter tabular-nums neon-glow">00:00</div>
-          <div class="text-xs text-muted font-mono tracking-widest uppercase mt-4">Session Duration</div>
+        <div class="mb-4 md:mb-8">
+          <div id="timer" class="font-heading text-6xl md:text-9xl font-bold tracking-tighter tabular-nums neon-glow">00:00</div>
+          <div class="text-[10px] md:text-xs text-muted font-mono tracking-widest uppercase mt-2 md:mt-4">Session Duration</div>
         </div>
 
         <div class="flex items-center gap-6">
-          <button id="startBtn" onclick="toggleRecording()" class="h-16 px-10 bg-primary text-black font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(0,212,255,0.3)]">
+          <button id="startBtn" onclick="toggleRecording()" class="h-14 md:h-16 px-8 md:px-10 bg-primary text-black font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(0,212,255,0.3)]">
             Start Recording
           </button>
         </div>
