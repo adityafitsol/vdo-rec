@@ -1,950 +1,289 @@
 const express = require('express');
 const http = require('http');
-const WebSocket = require('ws');
+const { Server } = require('ws');
 const path = require('path');
 const fs = require('fs');
 const open = require('open');
-const chalk = require('chalk');
-
 const { startRecording, stopRecording, getRecordingState } = require('../commands/record');
-const { resolveOutputPath } = require('../commands/output');
-const { detectPlatform } = require('../utils/platform');
-const { formatDuration, formatBytes } = require('../utils/ui');
 
 const PORT = 4242;
 
 function launchGui() {
   const app = express();
   const server = http.createServer(app);
-  const wss = new WebSocket.Server({ server });
+  const wss = new Server({ server });
 
   app.use(express.json());
 
-  // serve the single HTML page
+  // Main UI
   app.get('/', (req, res) => {
-    res.send(buildHtml());
-  });
-
-  // serve recorded files so the browser can play them back
-  app.use('/recordings', express.static(path.resolve('./recordings')));
-
-  // REST: get current status
-  app.get('/api/status', (req, res) => {
-    const state = getRecordingState();
-    const elapsed = state.active && state.startTime
-      ? Math.floor((Date.now() - state.startTime) / 1000)
-      : 0;
-
-    let size = 0;
-    if (state.outputPath) {
-      try { size = fs.statSync(state.outputPath).size; } catch (_) {}
+    const recordingsDir = path.join(process.cwd(), 'recordings');
+    let recordings = [];
+    if (fs.existsSync(recordingsDir)) {
+      recordings = fs.readdirSync(recordingsDir).filter(f => f.match(/\.(mp4|mkv|webm|gif)$/));
     }
 
-    res.json({
-      active: state.active,
-      elapsed,
-      elapsedStr: formatDuration(elapsed),
-      size,
-      sizeStr: formatBytes(size),
-      outputPath: state.outputPath,
-      config: state.config,
-    });
-  });
-
-  // REST: list saved recordings
-  app.get('/api/recordings', (req, res) => {
-    const dir = path.resolve('./recordings');
-    if (!fs.existsSync(dir)) return res.json([]);
-
-    const files = fs.readdirSync(dir)
-      .filter(f => /\.(mp4|mkv|webm|gif)$/.test(f))
-      .map(f => {
-        const full = path.join(dir, f);
-        const stat = fs.statSync(full);
-        return { name: f, size: stat.size, sizeStr: formatBytes(stat.size), mtime: stat.mtime };
-      })
-      .sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
-
-    res.json(files);
-  });
-
-  // REST: start recording
-  app.post('/api/start', async (req, res) => {
-    const state = getRecordingState();
-    if (state.active) return res.status(400).json({ error: 'Already recording' });
-
-    const { mode = 'screen', fps = 30, quality = 'high', format = 'mp4' } = req.body;
-
-    res.json({ ok: true, message: 'Recording started' });
-
-    // run in background — don't await here or the response never sends
-    startRecording({
-      screen: true,
-      webcam: false,
-      mic: req.body.mic || false,
-      sysAudio: req.body.sysAudio || false,
-      pip: false,
-      fps: parseInt(fps),
-      quality,
-      format,
-      out: './recordings',
-    }).catch(err => {
-      console.error('Recording error:', err.message);
-      broadcast(wss, { type: 'error', message: err.message });
-    });
-  });
-
-  // REST: stop recording
-  app.post('/api/stop', (req, res) => {
-    const state = getRecordingState();
-    if (!state.active) return res.status(400).json({ error: 'Not recording' });
-
-    const stopped = stopRecording();
-    if (!stopped) return res.status(400).json({ error: 'Could not stop recording' });
-
-    res.json({ ok: true });
-  });
-
-  // WebSocket: push status updates every second
-  wss.on('connection', (ws) => {
-    ws.send(JSON.stringify({ type: 'connected' }));
-  });
-
-  let lastBroadcastWasActive = false;
-
-  setInterval(() => {
-    const state = getRecordingState();
-
-    // broadcast stopped state once when recording ends
-    if (!state.active && lastBroadcastWasActive) {
-      lastBroadcastWasActive = false;
-      broadcast(wss, { type: 'stopped' });
-      return;
-    }
-
-    if (!state.active) return;
-    lastBroadcastWasActive = true;
-
-    const elapsed = state.startTime
-      ? Math.floor((Date.now() - state.startTime) / 1000)
-      : 0;
-
-    let size = 0;
-    if (state.outputPath) {
-      try { size = fs.statSync(state.outputPath).size; } catch (_) {}
-    }
-
-    broadcast(wss, {
-      type: 'tick',
-      elapsed,
-      elapsedStr: formatDuration(elapsed),
-      size,
-      sizeStr: formatBytes(size),
-      active: true,
-    });
-  }, 1000);
-
-  server.listen(PORT, () => {
-    console.log('\n' + chalk.cyan('  vdo GUI'));
-    console.log(chalk.gray('  running at ') + chalk.white(`http://localhost:${PORT}`));
-    console.log(chalk.gray('  press Ctrl+C to quit\n'));
-    open(`http://localhost:${PORT}`);
-  });
-}
-
-function broadcast(wss, data) {
-  const msg = JSON.stringify(data);
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(msg);
-    }
-  });
-}
-
-function buildHtml() {
-  return `<!DOCTYPE html>
-<html lang="en">
+    res.send(`
+<!DOCTYPE html>
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>vdo</title>
+  <title>vdo-rec Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            bg: '#030303',
+            surface: '#0a0a0a',
+            primary: '#00d4ff',
+            accent: '#00ff88',
+            muted: '#888888',
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            heading: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        }
+      }
+    }
+  </script>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #050505;
-      --surface: #111111;
-      --surface-glass: rgba(255, 255, 255, 0.03);
-      --border: rgba(255, 255, 255, 0.1);
-      --text: #ffffff;
-      --muted: #888888;
-      --accent: #00d4ff;
-      --red: #ff3333;
-      --green: #00ff88;
-      --yellow: #ffcc00;
-      --font: 'Space Grotesk', sans-serif;
-    }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      background-image: radial-gradient(circle at 50% -20%, #1a1a1a, #050505);
-    }
-
-    header {
-      padding: 24px 32px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    header h1 {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--accent);
-      letter-spacing: 2px;
-    }
-
-    header .tagline {
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .main {
-      display: grid;
-      grid-template-columns: 1fr 320px;
-      gap: 0;
-      flex: 1;
-    }
-
-    .panel {
-      padding: 40px;
-      border-right: 1px solid var(--border);
-    }
-
-    .sidebar {
-      padding: 32px;
-      background: rgba(255, 255, 255, 0.01);
-    }
-
-    /* recording status */
-    .status-card {
-      background: var(--surface-glass);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 32px;
-      margin-bottom: 32px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    }
-
-    .rec-indicator {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-
-    .rec-dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: var(--muted);
-      transition: background 0.3s;
-      flex-shrink: 0;
-    }
-
-    .rec-dot.active {
-      background: var(--red);
-      box-shadow: 0 0 12px var(--red);
-      animation: pulse 1s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    .rec-label {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 1px;
-      color: var(--muted);
-    }
-
-    .rec-label.active { color: var(--red); }
-
-    .timer {
-      font-size: 52px;
-      font-weight: 700;
-      letter-spacing: 4px;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-      margin-bottom: 8px;
-    }
-
-    .timer.active { color: var(--accent); }
-
-    .file-size {
-      font-size: 13px;
-      color: var(--muted);
-      min-height: 18px;
-    }
-
-    /* controls */
-    .controls {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-
-    button {
-      padding: 12px 24px;
-      border: none;
-      border-radius: 6px;
-      font-family: inherit;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      letter-spacing: 0.5px;
-      transition: opacity 0.15s, transform 0.1s;
-    }
-
-    button:active { transform: scale(0.97); }
-    button:disabled { opacity: 0.35; cursor: not-allowed; }
-
-    .btn-record {
-      background: var(--red);
-      color: #fff;
-      flex: 1;
-    }
-
-    .btn-stop {
-      background: var(--surface);
-      color: var(--text);
-      border: 1px solid var(--border);
-      flex: 1;
-    }
-
-    /* config form */
-    .config-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-      margin-bottom: 32px;
-      background: var(--surface-glass);
-      padding: 24px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-    }
-
-    .field label {
-      display: block;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      margin-bottom: 8px;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-    }
-
-    .field select, .field input {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 8px 10px;
-      border-radius: 5px;
-      font-family: inherit;
-      font-size: 13px;
-      outline: none;
-    }
-
-    .field select:focus, .field input:focus {
-      border-color: var(--accent);
-    }
-
-    /* recordings list */
-    .section-title {
-      font-size: 11px;
-      color: var(--muted);
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-bottom: 14px;
-    }
-
-    .recordings-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .recording-item {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 12px 14px;
-      cursor: pointer;
-      transition: border-color 0.15s;
-    }
-
-    .recording-item:hover { border-color: var(--accent); }
-
-    .recording-item .name {
-      font-size: 12px;
-      color: var(--text);
-      margin-bottom: 4px;
-      word-break: break-all;
-    }
-
-    .recording-item .meta {
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    .empty-state {
-      font-size: 13px;
-      color: var(--muted);
-      padding: 16px 0;
-    }
-
-    /* toast */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 12px 18px;
-      font-size: 13px;
-      opacity: 0;
-      transform: translateY(8px);
-      transition: opacity 0.2s, transform 0.2s;
-      pointer-events: none;
-      z-index: 100;
-    }
-
-    .toast.show {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .toast.error { border-color: var(--red); color: var(--red); }
-    .toast.success { border-color: var(--green); color: var(--green); }
-
-    /* ws status dot */
-    .ws-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--muted);
-      display: inline-block;
-      margin-right: 6px;
-    }
-    .ws-dot.connected { background: var(--green); }
-
-    /* volume meter */
-    .mic-test {
-      margin-top: 12px;
-      display: none;
-      align-items: center;
-      gap: 10px;
-      background: var(--surface);
-      padding: 10px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-    }
-    .meter-bg {
-      flex: 1;
-      height: 6px;
-      background: #333;
-      border-radius: 3px;
-      overflow: hidden;
-    }
-    .meter-fill {
-      height: 100%;
-      width: 0%;
-      background: var(--green);
-      box-shadow: 0 0 8px var(--green);
-      transition: width 0.1s ease;
-    }
-    .mic-label {
-      font-size: 10px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    /* Draggable Webcam Preview */
-    .preview-container {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16/9;
-      background: #000;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin-bottom: 24px;
-      overflow: hidden;
-    }
-    .preview-label {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.5);
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      color: var(--muted);
-      z-index: 10;
-    }
-    .pip-preview {
-      position: absolute;
-      width: 25%;
-      aspect-ratio: 16/9;
-      background: #222;
-      border: 2px solid var(--accent);
-      border-radius: 8px;
-      cursor: move;
-      display: none;
-      overflow: hidden;
-      z-index: 5;
-    }
-    .pip-preview video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .pip-preview.dragging {
-      border-color: var(--green);
-      opacity: 0.8;
-    }
-    .pip-preview.circle {
-      aspect-ratio: 1/1;
-      border-radius: 50%;
-    }
+    body { background-color: #030303; color: white; overflow-x: hidden; }
+    .glass { background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); }
+    .neon-glow { text-shadow: 0 0 20px rgba(0, 212, 255, 0.5); }
+    .recording-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
   </style>
 </head>
-<body>
-
-<header>
-  <h1>VDO</h1>
-  <span class="tagline">records your screen. that's it.</span>
-  <span style="margin-left:auto;font-size:11px;color:var(--muted)">
-    <span class="ws-dot" id="wsDot"></span>
-    <span id="wsStatus">connecting...</span>
-  </span>
-</header>
-
-<div class="main">
-  <div class="panel">
-
-    <div class="status-card">
-      <div class="rec-indicator">
-        <div class="rec-dot" id="recDot"></div>
-        <span class="rec-label" id="recLabel">IDLE</span>
-      </div>
-      <div class="timer" id="timer">00:00</div>
-      <div class="file-size" id="fileSize"></div>
-    </div>
-
-    <div class="preview-container" id="previewContainer">
-      <div class="preview-label">Screen Capture Area (Preview)</div>
-      <div class="pip-preview" id="pipPreview" style="display: none;">
-        <video id="webcamVideo" autoplay muted playsinline></video>
-      </div>
-    </div>
-
-    <div class="controls">
-      <button class="btn-record" id="btnRecord" onclick="startRec()">● Start Recording</button>
-      <button class="btn-stop" id="btnStop" onclick="stopRec()" disabled>■ Stop</button>
-    </div>
-
-    <div class="config-grid">
-      <div class="field">
-        <label>Mode</label>
-        <select id="cfgMode">
-          <option value="screen">Screen Only</option>
-          <option value="both" disabled>Screen + Webcam (Coming Soon)</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>FPS</label>
-        <select id="cfgFps">
-          <option value="24">24</option>
-          <option value="30" selected>30</option>
-          <option value="60">60</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Quality</label>
-        <select id="cfgQuality">
-          <option value="lossless">Lossless</option>
-          <option value="high" selected>High</option>
-          <option value="balanced">Balanced</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Format</label>
-        <select id="cfgFormat">
-          <option value="mp4" selected>mp4</option>
-          <option value="mkv">mkv</option>
-          <option value="webm">webm</option>
-          <option value="gif">gif</option>
-        </select>
-      </div>
-      <div class="field" id="shapeField" style="display: none;">
-        <label>Webcam Shape</label>
-        <select id="cfgShape" onchange="updateWebcamShape()">
-          <option value="rectangle" selected>Rectangle</option>
-          <option value="circle">Circle</option>
-        </select>
-      </div>
-      <div class="field" style="grid-column: span 2; display: flex; align-items: center; gap: 12px; padding-top: 10px;">
-        <input type="checkbox" id="cfgMic" style="width: 20px; height: 20px;" onchange="toggleMicTest()">
-        <label for="cfgMic" style="margin-bottom: 0; cursor: pointer;">Record Microphone</label>
-      </div>
-      <div class="field" style="grid-column: span 2; display: flex; align-items: center; gap: 12px; padding-top: 5px;">
-        <input type="checkbox" id="cfgSysAudio" style="width: 20px; height: 20px;">
-        <label for="cfgSysAudio" style="margin-bottom: 0; cursor: pointer;">Record System Audio</label>
-      </div>
-    </div>
-
-    <div class="mic-test" id="micTest">
-      <span class="mic-label">Mic Activity</span>
-      <div class="meter-bg">
-        <div class="meter-fill" id="meterFill"></div>
-      </div>
-    </div>
-
+<body class="antialiased selection:bg-primary/30">
+  <div class="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+    <div class="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full"></div>
+    <div class="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] bg-accent/5 blur-[120px] rounded-full"></div>
   </div>
 
-  <div class="sidebar">
-    <div class="section-title">Recordings</div>
-    <div class="recordings-list" id="recordingsList">
-      <div class="empty-state">No recordings yet.</div>
-    </div>
+  <div class="max-w-6xl mx-auto px-6 py-12 flex flex-col md:flex-row gap-8 min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-full md:w-80 flex flex-col gap-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center rotate-3 shadow-[0_0_15px_rgba(0,212,255,0.4)]">
+          <span class="material-symbols-outlined text-black text-sm font-bold">videocam</span>
+        </div>
+        <span class="font-heading text-xl font-bold tracking-tight">vdo<span class="text-primary">-rec</span></span>
+      </div>
+
+      <div class="glass p-6 rounded-3xl space-y-6">
+        <h3 class="text-[10px] font-bold text-muted uppercase tracking-widest">Library</h3>
+        <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          ${recordings.length ? recordings.map(f => `
+            <div class="group flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer border border-transparent hover:border-white/5">
+              <div class="flex items-center gap-3 overflow-hidden">
+                <span class="material-symbols-outlined text-muted group-hover:text-primary transition-colors">movie</span>
+                <span class="text-xs font-mono truncate text-muted group-hover:text-white transition-colors">${f}</span>
+              </div>
+            </div>
+          `).join('') : '<div class="text-[10px] text-muted italic">No recordings yet</div>'}
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Control -->
+    <main class="flex-1 flex flex-col gap-8">
+      <div class="glass p-12 rounded-[48px] flex flex-col items-center justify-center text-center relative overflow-hidden">
+        <div id="statusIndicator" class="absolute top-8 left-8 flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5">
+          <span class="w-2 h-2 rounded-full bg-muted" id="statusDot"></span>
+          <span class="text-[10px] font-bold text-muted uppercase tracking-widest" id="statusText">Idle</span>
+        </div>
+
+        <div class="mb-8">
+          <div id="timer" class="font-heading text-8xl md:text-9xl font-bold tracking-tighter tabular-nums neon-glow">00:00</div>
+          <div class="text-xs text-muted font-mono tracking-widest uppercase mt-4">Session Duration</div>
+        </div>
+
+        <div class="flex items-center gap-6">
+          <button id="startBtn" onclick="toggleRecording()" class="h-16 px-10 bg-primary text-black font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(0,212,255,0.3)]">
+            Start Recording
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="glass p-8 rounded-[32px] space-y-6">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-white">Audio Levels</h3>
+            <span class="material-symbols-outlined text-muted text-sm">equalizer</span>
+          </div>
+          <div class="space-y-6">
+            <div class="space-y-2">
+              <div class="flex justify-between text-[10px] font-bold text-muted uppercase tracking-widest">
+                <span>Microphone</span>
+                <span id="micVal">0%</span>
+              </div>
+              <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div id="micBar" class="h-full bg-primary shadow-[0_0_10px_rgba(0,212,255,0.5)] transition-all duration-100" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <div class="flex justify-between text-[10px] font-bold text-muted uppercase tracking-widest">
+                <span>System Audio</span>
+                <span id="sysVal">0%</span>
+              </div>
+              <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div id="sysBar" class="h-full bg-accent shadow-[0_0_10px_rgba(0,255,136,0.5)] transition-all duration-100" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass p-8 rounded-[32px] space-y-6">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-white">Output Info</h3>
+            <span class="material-symbols-outlined text-muted text-sm">info</span>
+          </div>
+          <div class="space-y-4 text-sm font-mono">
+            <div class="flex justify-between py-2 border-b border-white/5">
+              <span class="text-muted">FPS</span>
+              <span class="text-white">60</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-white/5">
+              <span class="text-muted">Encoder</span>
+              <span class="text-white">Hardware (Auto)</span>
+            </div>
+            <div class="flex justify-between py-2">
+              <span class="text-muted">Format</span>
+              <span class="text-primary font-bold">MP4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
   </div>
-</div>
 
-<div class="toast" id="toast"></div>
+  <script>
+    let isRecording = false;
+    let timerInterval;
+    let seconds = 0;
 
-<script>
-  let ws;
-  let isRecording = false;
-  let audioContext;
-  let analyser;
-  let microphone;
-  let animationId;
-  let pipX = 0.75; // normalized 0-1 (starting at bottom-right 75%)
-  let pipY = 0.75;
-  let webcamStream;
-
-  // Draggable logic
-  const pip = document.getElementById('pipPreview');
-  const container = document.getElementById('previewContainer');
-  let isDragging = false;
-  let startX, startY;
-
-  pip.addEventListener('mousedown', (e) => {
-    if (isRecording) return;
-    isDragging = true;
-    pip.classList.add('dragging');
-    startX = e.clientX - pip.offsetLeft;
-    startY = e.clientY - pip.offsetTop;
-  });
-
-  window.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    const rect = container.getBoundingClientRect();
-    let x = e.clientX - rect.left - startX;
-    let y = e.clientY - rect.top - startY;
-
-    // Bounds
-    x = Math.max(0, Math.min(x, rect.width - pip.offsetWidth));
-    y = Math.max(0, Math.min(y, rect.height - pip.offsetHeight));
-
-    pip.style.left = x + 'px';
-    pip.style.top = y + 'px';
-
-    // Update normalized coords
-    pipX = x / rect.width;
-    pipY = y / rect.height;
-  });
-
-  window.addEventListener('mouseup', () => {
-    isDragging = false;
-    pip.classList.remove('dragging');
-  });
-
-  function updateWebcamShape() {
-    const shape = document.getElementById('cfgShape').value;
-    if (shape === 'circle') {
-      pip.classList.add('circle');
-    } else {
-      pip.classList.remove('circle');
-    }
-  }
-
-  async function toggleWebcamPreview() {
-    const mode = document.getElementById('cfgMode').value;
-    const showPip = mode === 'both' || mode === 'webcam';
+    const ws = new WebSocket(\`ws://\${window.location.host}\`);
     
-    document.getElementById('shapeField').style.display = showPip ? 'block' : 'none';
-
-    if (showPip) {
-      pip.style.display = 'block';
-      updateWebcamShape();
-      
-      // Force a layout recalculation for initial position
-      setTimeout(() => {
-        const rect = container.getBoundingClientRect();
-        if (rect.width > 0) {
-          pip.style.left = (pipX * rect.width) + 'px';
-          pip.style.top = (pipY * rect.height) + 'px';
-        }
-      }, 50);
-
-      if (!webcamStream) {
-        try {
-          webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          document.getElementById('webcamVideo').srcObject = webcamStream;
-        } catch (err) {
-          console.error('Webcam access denied:', err);
-          toast('Webcam access denied', 'error');
-        }
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'status') {
+        updateUI(data.state);
       }
-    } else {
-      pip.style.display = 'none';
-      if (webcamStream) {
-        webcamStream.getTracks().forEach(t => t.stop());
-        webcamStream = null;
+      if (data.type === 'audio') {
+        updateAudioMeters(data.mic, data.sys);
+      }
+    };
+
+    function updateUI(state) {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      const btn = document.getElementById('startBtn');
+      const timer = document.getElementById('timer');
+
+      if (state.isRecording) {
+        isRecording = true;
+        dot.className = 'w-2 h-2 rounded-full bg-primary recording-pulse shadow-[0_0_10px_rgba(0,212,255,0.8)]';
+        text.innerText = 'Recording';
+        text.className = 'text-[10px] font-bold text-primary uppercase tracking-widest';
+        btn.innerText = 'Stop Session';
+        btn.className = 'h-16 px-10 bg-white text-black font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-2xl';
+        
+        if (!timerInterval) {
+          timerInterval = setInterval(() => {
+            seconds++;
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            timer.innerText = \`\${m}:\${s}\`;
+          }, 1000);
+        }
+      } else {
+        isRecording = false;
+        dot.className = 'w-2 h-2 rounded-full bg-muted';
+        text.innerText = 'Idle';
+        text.className = 'text-[10px] font-bold text-muted uppercase tracking-widest';
+        btn.innerText = 'Start Recording';
+        btn.className = 'h-16 px-10 bg-primary text-black font-bold rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(0,212,255,0.3)]';
+        
+        clearInterval(timerInterval);
+        timerInterval = null;
+        seconds = 0;
+        timer.innerText = '00:00';
       }
     }
 
-    // Set initial position if first time
-    if (showPip) {
-      const rect = container.getBoundingClientRect();
-      pip.style.left = (pipX * rect.width) + 'px';
-      pip.style.top = (pipY * rect.height) + 'px';
+    function updateAudioMeters(mic, sys) {
+      document.getElementById('micBar').style.width = \`\${mic}%\`;
+      document.getElementById('micVal').innerText = \`\${Math.round(mic)}%\`;
+      document.getElementById('sysBar').style.width = \`\${sys}%\`;
+      document.getElementById('sysVal').innerText = \`\${Math.round(sys)}%\`;
     }
-  }
 
-  document.getElementById('cfgMode').addEventListener('change', toggleWebcamPreview);
-
-  async function toggleMicTest() {
-    const isChecked = document.getElementById('cfgMic').checked;
-    const testEl = document.getElementById('micTest');
-    const fillEl = document.getElementById('meterFill');
-
-    if (isChecked) {
-      testEl.style.display = 'flex';
+    async function toggleRecording() {
+      const action = isRecording ? 'stop' : 'start';
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioContext.createAnalyser();
-        microphone = audioContext.createMediaStreamSource(stream);
-        microphone.connect(analyser);
-        analyser.fftSize = 256;
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        const updateMeter = () => {
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < bufferLength; i++) {
-            sum += dataArray[i];
-          }
-          const average = sum / bufferLength;
-          const vol = Math.min(100, Math.pow(average / 128, 0.5) * 100);
-          fillEl.style.width = vol + '%';
-          animationId = requestAnimationFrame(updateMeter);
-        };
-        updateMeter();
+        await fetch(\`/\${action}\`, { method: 'POST' });
       } catch (err) {
-        console.error('Mic access denied:', err);
-        testEl.style.display = 'none';
-        document.getElementById('cfgMic').checked = false;
-        toast('Microphone access denied', 'error');
+        console.error('Failed to ' + action, err);
       }
-    } else {
-      testEl.style.display = 'none';
-      if (animationId) cancelAnimationFrame(animationId);
-      if (audioContext) audioContext.close();
-      fillEl.style.width = '0%';
     }
-  }
-
-  function connectWs() {
-    ws = new WebSocket('ws://' + location.host);
-
-    ws.onopen = () => {
-      document.getElementById('wsDot').className = 'ws-dot connected';
-      document.getElementById('wsStatus').textContent = 'live';
-    };
-
-    ws.onclose = () => {
-      document.getElementById('wsDot').className = 'ws-dot';
-      document.getElementById('wsStatus').textContent = 'disconnected';
-      // reconnect after 2s
-      setTimeout(connectWs, 2000);
-    };
-
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-
-      if (msg.type === 'tick') {
-        updateStatus(true, msg.elapsedStr, msg.sizeStr);
-      }
-
-      if (msg.type === 'stopped') {
-        setRecordingUi(false);
-        updateStatus(false, '00:00', '');
-        toast('Recording saved', 'success');
-        setTimeout(loadRecordings, 800);
-      }
-
-      if (msg.type === 'error') {
-        toast(msg.message, 'error');
-        updateStatus(false, '00:00', '');
-        setRecordingUi(false);
-      }
-    };
-  }
-
-  function updateStatus(active, timeStr, sizeStr) {
-    const dot = document.getElementById('recDot');
-    const label = document.getElementById('recLabel');
-    const timer = document.getElementById('timer');
-    const fileSize = document.getElementById('fileSize');
-
-    if (active) {
-      dot.className = 'rec-dot active';
-      label.className = 'rec-label active';
-      label.textContent = 'REC';
-      timer.className = 'timer active';
-    } else {
-      dot.className = 'rec-dot';
-      label.className = 'rec-label';
-      label.textContent = 'IDLE';
-      timer.className = 'timer';
-    }
-
-    timer.textContent = timeStr || '00:00';
-    fileSize.textContent = sizeStr || '';
-  }
-
-  function setRecordingUi(recording) {
-    isRecording = recording;
-    document.getElementById('btnRecord').disabled = recording;
-
-    const btnStop = document.getElementById('btnStop');
-    btnStop.disabled = !recording;
-    btnStop.textContent = '■ Stop';
-
-    ['cfgMode','cfgFps','cfgQuality','cfgFormat','cfgMic'].forEach(id => {
-      document.getElementById(id).disabled = recording;
-    });
-  }
-
-  async function startRec() {
-    const body = {
-      mode: document.getElementById('cfgMode').value,
-      fps: parseInt(document.getElementById('cfgFps').value),
-      quality: document.getElementById('cfgQuality').value,
-      format: document.getElementById('cfgFormat').value,
-      mic: document.getElementById('cfgMic').checked,
-      sysAudio: document.getElementById('cfgSysAudio').checked
-    };
-
-    const res = await fetch('/api/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      toast(data.error, 'error');
-      return;
-    }
-
-    setRecordingUi(true);
-    updateStatus(true, '00:00', '');
-    toast('Recording started', 'success');
-  }
-
-  async function stopRec() {
-    document.getElementById('btnStop').disabled = true;
-    document.getElementById('btnStop').textContent = '⏳ Stopping...';
-
-    const res = await fetch('/api/stop', { method: 'POST' });
-    const data = await res.json();
-
-    if (!res.ok) {
-      toast(data.error, 'error');
-      // re-enable stop button if it failed
-      document.getElementById('btnStop').disabled = false;
-      document.getElementById('btnStop').textContent = '■ Stop';
-    }
-    // UI reset happens via the 'stopped' websocket event — don't do it here
-    // otherwise there's a race between the fetch response and ffmpeg finishing
-  }
-
-  async function loadRecordings() {
-    const res = await fetch('/api/recordings');
-    const files = await res.json();
-    const list = document.getElementById('recordingsList');
-
-    if (files.length === 0) {
-      list.innerHTML = '<div class="empty-state">No recordings yet.</div>';
-      return;
-    }
-
-    list.innerHTML = files.map(f => \`
-      <div class="recording-item" onclick="window.open('/recordings/\${f.name}')">
-        <div class="name">\${f.name}</div>
-        <div class="meta">\${f.sizeStr}</div>
-      </div>
-    \`).join('');
-  }
-
-  function toast(msg, type = '') {
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.className = 'toast show' + (type ? ' ' + type : '');
-    setTimeout(() => { el.className = 'toast'; }, 3000);
-  }
-
-  // poll status on load to sync UI if server was already recording
-  async function syncStatus() {
-    const res = await fetch('/api/status');
-    const data = await res.json();
-    if (data.active) {
-      setRecordingUi(true);
-      updateStatus(true, data.elapsedStr, data.sizeStr);
-    }
-  }
-
-  connectWs();
-  loadRecordings();
-  syncStatus();
-
-  // refresh recordings list every 10s
-  setInterval(loadRecordings, 10000);
-</script>
-
+  </script>
 </body>
-</html>`;
+</html>
+    `);
+  });
+
+  app.post('/start', async (req, res) => {
+    try {
+      await startRecording({ screen: true, mic: true, sysAudio: true });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/stop', async (req, res) => {
+    try {
+      await stopRecording();
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  wss.on('connection', (ws) => {
+    const interval = setInterval(() => {
+      const state = getRecordingState();
+      ws.send(JSON.stringify({ type: 'status', state }));
+      
+      // Simulated audio levels for UI demo
+      if (state.isRecording) {
+        ws.send(JSON.stringify({
+          type: 'audio',
+          mic: Math.random() * 40 + 20,
+          sys: Math.random() * 30 + 10
+        }));
+      } else {
+        ws.send(JSON.stringify({ type: 'audio', mic: 0, sys: 0 }));
+      }
+    }, 500);
+
+    ws.on('close', () => clearInterval(interval));
+  });
+
+  server.listen(PORT, () => {
+    console.log(\`\n  \x1b[36m✓ GUI Dashboard active at http://localhost:\${PORT}\x1b[0m\`);
+    open(\`http://localhost:\${PORT}\`);
+  });
 }
 
 module.exports = { launchGui };

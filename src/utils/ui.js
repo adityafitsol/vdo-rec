@@ -13,7 +13,7 @@ function printBanner() {
     ╚═══╝  ╚═════╝  ╚═════╝
   `;
   console.log(chalk.cyan(art));
-  console.log(chalk.gray('  records your screen. that\'s it.\n'));
+  console.log(chalk.gray('  records your screen with audio.\n'));
 }
 
 function printRecordingBanner(config) {
@@ -114,14 +114,12 @@ async function runInteractivePrompt() {
   ]);
 
   return {
-    screen: true,
-    webcam: false,
-    mic: answers.mic || false,
-    sysAudio: answers.sysAudio || false,
     fps: answers.fps,
     quality: answers.quality,
     format: answers.format,
     out: answers.out,
+    mic: answers.mic || false,
+    sysAudio: answers.sysAudio || false,
   };
 }
 

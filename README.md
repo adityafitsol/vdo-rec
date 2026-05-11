@@ -1,80 +1,94 @@
-# vdo
+# vdo-rec
 
-vdo records your screen. that's it.
+vdo-rec is a premium terminal-based screen recorder designed for performance and simplicity. It provides a robust interface for capturing your screen along with multi-source audio (microphone and system audio) without requiring external system dependencies.
 
-Premium terminal-based screen recorder. Wraps FFmpeg under the hood, auto-picks the best codec for your machine. Featuring a stunning Glassmorphism GUI and built-in audio support.
+## Key Features
+
+- Single-binary setup: FFmpeg is bundled with the package.
+- Intelligent Encoding: Automatically selects the best hardware or software encoder for your platform (NVENC, VideoToolbox, or x264).
+- Audio Mixing: Record microphone and system audio simultaneously with automatic mixing.
+- Flexible Interface: Use the interactive CLI or standard flags.
+- Cross-Platform: Native support for Windows, macOS, and Linux.
 
 ## Quickstart
+
+Run without installation:
 
 ```bash
 npx @adityafitsol/vdo-rec
 ```
 
-that's it. it'll ask you what you want to record.
+The interactive prompt will guide you through the recording setup.
 
-## Install Globally
+## Installation
+
+Install globally for regular use:
 
 ```bash
 npm install -g @adityafitsol/vdo-rec
 vdo
 ```
 
-## CLI Flags
+## CLI Usage
 
+### Basic Recording
 ```bash
-# interactive mode (no args)
+# Interactive mode
 vdo
 
-# screen only
+# Record screen with default settings
 vdo --screen
+```
 
-# audio recording
-vdo --screen --mic            # record microphone
-vdo --screen --sys-audio      # record system audio (internal sound)
-vdo --screen --mic --sys-audio # record both (mixed!)
+### Audio Options
+```bash
+# Record with microphone
+vdo --screen --mic
 
-# launch premium GUI
-vdo --gui
+# Record with system audio (internal sound)
+vdo --screen --sys-audio
 
-# webcam overlay (Coming Soon in v0.4)
-# vdo --screen --webcam --pip --shape circle
+# Record both microphone and system audio mixed
+vdo --screen --mic --sys-audio
+```
 
-# set framerate
+### Advanced Configuration
+```bash
+# Set frame rate
 vdo --screen --fps 60
 
-# quality levels
-vdo --screen --quality high       # crf 18, default
-vdo --screen --quality balanced   # crf 28, smaller files
+# Set quality level (lossless | high | balanced)
+vdo --screen --quality high
 
-# list available cameras and audio devices
+# Change output format (mp4 | mkv | webm | gif)
+vdo --screen --format webm
+
+# Specify output directory
+vdo --screen --out ./my-recordings
+```
+
+### Utilities
+```bash
+# List available audio input devices
 vdo --list-devices
 ```
 
-## Premium Web GUI
 
-Launch a beautiful, modern recording dashboard with:
-- Glassmorphism UI: Stunning dark-mode interface using Space Grotesk font.
-- Mic Meter: Visual volume bar to verify your microphone is working.
-- One-Click Recording: Start/Stop and manage your captures from the browser.
-- Webcam Overlay: Draggable PiP and circular crops coming soon!
 
-```bash
-vdo --gui
-```
+## Technical Details
 
-## How it works
+vdo-rec leverages FFmpeg for high-performance video and audio capture.
 
-vdo wraps FFmpeg using fluent-ffmpeg. it ships its own FFmpeg binary via @ffmpeg-installer/ffmpeg so you don't need to install anything system-level.
+- Windows: Uses gdigrab and dshow.
+- macOS: Uses avfoundation.
+- Linux: Uses x11grab and PulseAudio/ALSA.
 
-- Video Capture: Uses gdigrab (Windows), avfoundation (macOS), or x11grab (Linux).
-- Audio Capture: Uses dshow (Windows), avfoundation (macOS), or pulse/alsa (Linux).
-- Internal Sound: Supports Windows Stereo Mix loopback and Linux PulseAudio monitor streams.
-- Mixing: Automatically mixes multiple audio sources (mic + system) into a single high-quality stream.
+The application automatically handles hardware acceleration on supported systems to reduce CPU overhead during recording.
 
 ## Requirements
 
-- Node.js 14+
-- nothing else (FFmpeg is bundled)
+- Node.js 14.0 or higher.
+- No external FFmpeg installation required.
 
 ## License
 

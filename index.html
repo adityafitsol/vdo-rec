@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vdo-rec | Professional Screen Recording</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            bg: '#030303',
+            surface: '#0a0a0a',
+            primary: '#00d4ff',
+            'primary-dark': '#00a3c4',
+            accent: '#00ff88',
+            muted: '#888888',
+            border: 'rgba(255, 255, 255, 0.08)',
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            heading: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          animation: {
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'float': 'float 6s ease-in-out infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-20px)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #030303;
+      color: #ffffff;
+      overflow-x: hidden;
+    }
+
+    .mesh-gradient {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: 
+        radial-gradient(circle at 10% 20%, rgba(0, 212, 255, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(0, 255, 136, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0%, #030303 100%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+    }
+
+    .glass:hover {
+      border-color: rgba(0, 212, 255, 0.3);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .text-glow {
+      text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+    }
+
+    .terminal-header {
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #030303; }
+    ::-webkit-scrollbar-thumb { background: #222; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #00d4ff; }
+
+    .cursor-blink {
+      display: inline-block;
+      width: 8px;
+      height: 18px;
+      background: #00d4ff;
+      margin-left: 4px;
+      animation: blink 1s step-end infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    .feature-card:hover .icon-bg {
+      transform: scale(1.1) rotate(5deg);
+      background: rgba(0, 212, 255, 0.1);
+    }
+  </style>
+</head>
+<body class="selection:bg-primary/30 selection:text-primary">
+
+<div class="mesh-gradient"></div>
+
+<!-- Navigation -->
+<nav class="fixed top-0 w-full z-50 border-b border-white/5 bg-black/50 backdrop-blur-md">
+  <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center rotate-3 shadow-[0_0_20px_rgba(0,212,255,0.4)]">
+        <span class="material-symbols-outlined text-black font-bold">videocam</span>
+      </div>
+      <span class="font-heading text-2xl font-bold tracking-tight">vdo<span class="text-primary">-rec</span></span>
+    </div>
+    
+    <div class="hidden md:flex items-center gap-10">
+      <a href="#features" class="text-sm font-medium text-muted hover:text-white transition-colors">Features</a>
+      <a href="docs.html" class="text-sm font-medium text-muted hover:text-white transition-colors">Documentation</a>
+      <a href="https://github.com/adityafitsol/vdo-rec" class="text-sm font-medium text-muted hover:text-white transition-colors">GitHub</a>
+      <a href="#" class="px-6 py-2.5 bg-white text-black text-sm font-bold rounded-full hover:bg-primary transition-all hover:scale-105 active:scale-95 shadow-xl">
+        Download v0.4.0
+      </a>
+    </div>
+
+    <button class="md:hidden text-white">
+      <span class="material-symbols-outlined">menu</span>
+    </button>
+  </div>
+</nav>
+
+<main>
+  <!-- Hero Section -->
+  <section class="pt-40 pb-24 px-6">
+    <div class="max-w-7xl mx-auto text-center">
+      <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs font-bold uppercase tracking-widest mb-8 animate-fade-in">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+        </span>
+        New Release v0.4.0
+      </div>
+      
+      <h1 class="font-heading text-6xl md:text-8xl font-bold mb-8 tracking-tighter leading-[0.9] max-w-4xl mx-auto">
+        Screen recording <br/>
+        <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">reimagined.</span>
+      </h1>
+      
+      <p class="text-muted text-lg md:text-xl max-w-2xl mx-auto mb-16 leading-relaxed">
+        High-performance terminal recorder for engineers. <br class="hidden md:block"/>
+        Single binary. Zero dependencies. Studio-quality audio mixing.
+      </p>
+
+      <!-- Terminal Mockup -->
+      <div class="max-w-4xl mx-auto relative group animate-float">
+        <div class="absolute -inset-4 bg-primary/10 rounded-[40px] blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity"></div>
+        <div class="relative glass rounded-3xl overflow-hidden shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border border-white/10">
+          <div class="terminal-header flex items-center justify-between px-6 py-4 bg-white/[0.02]">
+            <div class="flex gap-2.5">
+              <div class="w-3 h-3 rounded-full bg-[#ff5f56]/80 shadow-[0_0_10px_rgba(255,95,86,0.3)]"></div>
+              <div class="w-3 h-3 rounded-full bg-[#ffbd2e]/80 shadow-[0_0_10px_rgba(255,189,46,0.3)]"></div>
+              <div class="w-3 h-3 rounded-full bg-[#27c93f]/80 shadow-[0_0_10px_rgba(39,201,63,0.3)]"></div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[14px] text-muted">terminal</span>
+              <span class="text-[10px] font-mono text-muted uppercase tracking-[0.3em]">vdo — session:zsh</span>
+            </div>
+            <button class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center hover:bg-primary hover:text-black transition-all group/copy active:scale-90">
+              <span class="material-symbols-outlined text-sm">content_copy</span>
+            </button>
+          </div>
+          
+          <div class="p-10 text-left font-mono text-base md:text-lg leading-relaxed relative">
+            <!-- Terminal Lines -->
+            <div class="space-y-4">
+              <div class="flex items-center gap-4">
+                <span class="text-accent/60">➜</span>
+                <span class="text-primary">~</span>
+                <span class="text-white">npx @adityafitsol/vdo-rec<span class="cursor-blink"></span></span>
+              </div>
+              
+              <div class="pt-4 space-y-3">
+                <div class="flex items-center gap-3">
+                  <span class="text-muted/40 text-xs">12:45:02</span>
+                  <span class="text-muted">Initializing engine...</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-muted/40 text-xs">12:45:03</span>
+                  <span class="text-muted">Platform: <span class="text-white">win32</span> | Backend: <span class="text-primary">gdigrab</span></span>
+                </div>
+                <div class="flex items-center gap-3 text-accent">
+                  <span class="material-symbols-outlined text-sm">check_circle</span>
+                  <span>Audio mixer ready: [Mic + System]</span>
+                </div>
+                
+                <div class="mt-8 pt-8 border-t border-white/5">
+                  <div class="text-white font-bold mb-4 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                    Select recording mode:
+                  </div>
+                  <div class="space-y-2 pl-4">
+                    <div class="flex items-center gap-4 group/line cursor-pointer">
+                      <span class="text-primary">●</span>
+                      <span class="text-white group-hover:text-primary transition-colors">Screen Capture (Optimized)</span>
+                    </div>
+                    <div class="flex items-center gap-4 opacity-30">
+                      <span class="invisible">●</span>
+                      <span>Window Select...</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="mt-8 flex items-center gap-3 py-2 px-4 rounded-lg bg-primary/5 border border-primary/10 w-fit">
+                  <span class="text-[10px] font-bold text-primary uppercase tracking-widest">Status</span>
+                  <span class="text-sm text-white">Press <span class="px-1.5 py-0.5 rounded bg-white/10 text-xs">SPACE</span> to begin session</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section id="features" class="py-32 px-6 bg-surface/30 border-y border-white/5">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex flex-col md:flex-row items-end justify-between mb-20 gap-8">
+        <div class="max-w-xl">
+          <h2 class="font-heading text-4xl md:text-5xl font-bold mb-6">Engineered for <br/>the modern workflow.</h2>
+          <p class="text-muted">Every detail polished for speed and reliability.</p>
+        </div>
+        <div class="hidden md:block h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent mx-12"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <!-- Feature 1 -->
+        <div class="feature-card glass p-10 rounded-3xl transition-all duration-500 hover:-translate-y-2">
+          <div class="icon-bg w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-8 transition-all duration-500">
+            <span class="material-symbols-outlined text-primary text-3xl">package_2</span>
+          </div>
+          <h3 class="font-heading text-2xl font-bold mb-4">Self-Contained</h3>
+          <p class="text-muted leading-relaxed">No FFmpeg installation required. We bundle a custom-optimized binary that works out of the box.</p>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card glass p-10 rounded-3xl transition-all duration-500 hover:-translate-y-2">
+          <div class="icon-bg w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-8 transition-all duration-500">
+            <span class="material-symbols-outlined text-primary text-3xl">bolt</span>
+          </div>
+          <h3 class="font-heading text-2xl font-bold mb-4">Zero Lag</h3>
+          <p class="text-muted leading-relaxed">Intelligent hardware encoding (NVENC, VideoToolbox) ensures minimal CPU impact during recording.</p>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card glass p-10 rounded-3xl transition-all duration-500 hover:-translate-y-2">
+          <div class="icon-bg w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-8 transition-all duration-500">
+            <span class="material-symbols-outlined text-primary text-3xl">mic</span>
+          </div>
+          <h3 class="font-heading text-2xl font-bold mb-4">Audio Mixing</h3>
+          <p class="text-muted leading-relaxed">Simultaneous capture of microphone and internal system audio with real-time hardware mixing.</p>
+        </div>
+        <!-- Feature 4 -->
+        <div class="feature-card glass p-10 rounded-3xl transition-all duration-500 hover:-translate-y-2">
+          <div class="icon-bg w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-8 transition-all duration-500">
+            <span class="material-symbols-outlined text-primary text-3xl">web</span>
+          </div>
+          <h3 class="font-heading text-2xl font-bold mb-4">Premium GUI</h3>
+          <p class="text-muted leading-relaxed">A stunning browser-based dashboard with live meters, timers, and one-click controls.</p>
+        </div>
+
+
+        <!-- Feature 5 -->
+        <div class="feature-card glass p-10 rounded-3xl transition-all duration-500 hover:-translate-y-2">
+          <div class="icon-bg w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-8 transition-all duration-500">
+            <span class="material-symbols-outlined text-primary text-3xl">devices</span>
+          </div>
+          <h3 class="font-heading text-2xl font-bold mb-4">Multi-Platform</h3>
+          <p class="text-muted leading-relaxed">Native recording backends for Windows, macOS, and Linux ensure peak performance on any system.</p>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="feature-card glass p-10 rounded-3xl transition-all duration-500 hover:-translate-y-2">
+          <div class="icon-bg w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-8 transition-all duration-500">
+            <span class="material-symbols-outlined text-primary text-3xl">gif</span>
+          </div>
+          <h3 class="font-heading text-2xl font-bold mb-4">GIF Export</h3>
+          <p class="text-muted leading-relaxed">High-quality palette-optimized GIF conversion built right in for easy sharing.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-32 px-6">
+    <div class="max-w-5xl mx-auto glass p-16 md:p-24 rounded-[40px] text-center relative overflow-hidden">
+      <div class="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-primary/10 to-transparent pointer-events-none"></div>
+      
+      <h2 class="font-heading text-4xl md:text-6xl font-bold mb-8">Ready to upgrade <br/>your toolkit?</h2>
+      <p class="text-muted text-lg mb-12 max-w-xl mx-auto">Join thousands of developers capturing their work with precision.</p>
+      
+      <div class="flex flex-col md:flex-row items-center justify-center gap-6">
+        <a href="#" class="w-full md:w-auto px-10 py-4 bg-primary text-black font-bold rounded-full hover:bg-white transition-all hover:scale-105">
+          Get Started Now
+        </a>
+        <div class="flex items-center gap-2 text-muted text-sm">
+          <span class="material-symbols-outlined text-accent">verified</span>
+          MIT Licensed
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="py-16 px-6 border-t border-white/5">
+  <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-10">
+    <div class="flex items-center gap-3">
+      <span class="font-heading text-xl font-bold">vdo-rec</span>
+      <span class="text-muted text-xs">© 2026 Built for engineers.</span>
+    </div>
+    
+    <div class="flex gap-8 text-sm text-muted">
+      <a href="docs.html" class="hover:text-white transition-colors">Documentation</a>
+      <a href="docs.html" class="hover:text-white transition-colors">Changelog</a>
+      <a href="https://github.com/adityafitsol/vdo-rec" class="hover:text-white transition-colors">Privacy</a>
+      <a href="https://github.com/adityafitsol/vdo-rec" class="hover:text-white transition-colors">Twitter</a>
+    </div>
+  </div>
+</footer>
+
+  <script>
+    document.querySelectorAll('button').forEach(btn => {
+      if (btn.querySelector('.material-symbols-outlined')?.innerText === 'content_copy') {
+        btn.onclick = () => {
+          navigator.clipboard.writeText('npx @adityafitsol/vdo-rec');
+          const icon = btn.querySelector('.material-symbols-outlined');
+          const original = icon.innerText;
+          icon.innerText = 'check';
+          btn.classList.add('bg-accent', 'text-black');
+          setTimeout(() => {
+            icon.innerText = original;
+            btn.classList.remove('bg-accent', 'text-black');
+          }, 2000);
+        };
+      }
+    });
+  </script>
+</body>
+</html>
